@@ -8,7 +8,8 @@ def getASRModel(language: str,use_whisper:bool=True) -> IASRModel:
 
     if use_whisper:
         from whisper_wrapper import WhisperASRModel
-        return WhisperASRModel()
+        # 根据语言参数传递正确的语言代码
+        return WhisperASRModel(language=language)
     
     if language == 'de':
 

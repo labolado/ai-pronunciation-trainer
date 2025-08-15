@@ -5,8 +5,12 @@ from typing import Union
 import numpy as np 
 
 class WhisperASRModel(IASRModel):
-    def __init__(self, model_name="openai/whisper-base"):
-        self.asr = pipeline("automatic-speech-recognition", model=model_name, return_timestamps="word")
+    def __init__(self, model_name="openai/whisper-base", language="en"):
+        # 设置语言参数，避免语言识别错误
+        self.language = language
+        self.asr = pipeline("automatic-speech-recognition", 
+                           model=model_name, 
+                           return_timestamps="word")
         self._transcript = ""
         self._word_locations = []
         self.sample_rate = 16000
@@ -15,7 +19,9 @@ class WhisperASRModel(IASRModel):
         # 'audio' can be a path to a file or a numpy array of audio samples.
         if isinstance(audio, torch.Tensor):
             audio = audio.detach().cpu().numpy()
-        result = self.asr(audio[0])
+        
+        # 强制指定语言，避免自动检测错误
+        result = self.asr(audio[0], generate_kwargs={"language": self.language})
         self._transcript = result["text"]
         self._word_locations = [{"word": word_info["text"], 
                      "start_ts": word_info["timestamp"][0] * self.sample_rate if word_info["timestamp"][0] is not None else None,
