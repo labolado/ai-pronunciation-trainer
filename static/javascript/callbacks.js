@@ -31,8 +31,8 @@ let AILanguage = "de"; // Standard is German
 
 
 let STScoreAPIKey = 'rll5QsTiv83nti99BW6uCmvs9BDVxSB39SVFceYb'; // Public Key. If, for some reason, you would like a private one, send-me a message and we can discuss some possibilities
-let apiMainPathSample = 'http://127.0.0.1:3001';// 'http://127.0.0.1:3001';// 'https://a3hj0l2j2m.execute-api.eu-central-1.amazonaws.com/Prod';
-let apiMainPathSTS = 'http://127.0.0.1:3001';// 'https://wrg7ayuv7i.execute-api.eu-central-1.amazonaws.com/Prod';
+let apiMainPathSample = 'http://127.0.0.1:3000';// 'http://127.0.0.1:3000';// 'https://a3hj0l2j2m.execute-api.eu-central-1.amazonaws.com/Prod';
+let apiMainPathSTS = 'http://127.0.0.1:3000';// 'https://wrg7ayuv7i.execute-api.eu-central-1.amazonaws.com/Prod';
 
 
 // Variables to playback accuracy sounds

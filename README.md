@@ -1,4 +1,22 @@
 
+# AI Pronunciation Trainer
+
+🎯 **状态**: 已完成架构整合 - 统一Flask服务器部署
+
+## 快速启动
+```bash
+cd ai-pronunciation-trainer
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python webApp.py
+```
+访问: http://localhost:3000/
+
+📖 **详细部署指南**: [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md)
+
+---
+
 # AI Pronunciation Trainer 
 This tool uses AI to evaluate your pronunciation so you can improve it and be understood more clearly. You can go straight test the tool at https://aipronunciationtr.com (please use the chrome browser for desktop and have some patience for it to "warm-up" :) ). 
 

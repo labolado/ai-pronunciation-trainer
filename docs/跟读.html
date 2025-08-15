@@ -1,0 +1,910 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EchoVerse - 发音教练 (修复版)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --color-background: #0D1117;
+            --color-text-primary: #C9D1D9;
+            --color-text-secondary: #484f58;
+            --color-text-tertiary: #gray-400;
+            --color-brand-blue: #58A6FF;
+            --color-brand-blue-dark: #3b82f6;
+            --color-brand-yellow: #f59e0b;
+            --color-brand-purple: #A78BFA;
+            --color-card-bg: rgba(22, 27, 34, 0.8);
+            --color-card-border: #30363D;
+            --color-dot-inactive: #374151;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--color-background);
+            color: var(--color-text-primary);
+            overflow: hidden;
+        }
+        .aurora-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at top, rgba(29, 78, 216, 0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at bottom, rgba(5, 150, 105, 0.1) 0%, transparent 50%);
+            z-index: -1;
+            transition: background 0.5s ease-in-out;
+        }
+        .screen {
+            display: none;
+            min-height: 100vh;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        .screen.active {
+            display: flex;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.98); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .card {
+            background-color: var(--color-card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--color-card-border);
+            border-radius: 0.75rem;
+            transition: all 0.3s ease-in-out;
+            box-shadow: 0 4px 15px -5px rgba(0, 0, 0, 0.3);
+        }
+        .card:hover {
+            border-color: var(--color-brand-blue);
+            transform: translateY(-5px) scale(1.02);
+            box-shadow: 0 0 25px -5px rgba(88, 166, 255, 0.3);
+        }
+        .progress-dots-container {
+            display: flex;
+            width: 100%;
+            height: 20px;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+        }
+        .progress-dot {
+            width: 10px;
+            height: 10px;
+            background-color: var(--color-dot-inactive);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+            cursor: pointer;
+        }
+        .progress-dot.good { background-color: var(--color-brand-blue-dark); }
+        .progress-dot.bad { background-color: var(--color-brand-yellow); }
+        .progress-dot.current {
+            border-color: var(--color-brand-blue);
+            transform: scale(1.3);
+            box-shadow: 0 0 10px var(--color-brand-blue);
+        }
+        .status-match { color: var(--color-brand-blue); }
+        .status-substitute { color: #FBBF24; }
+        .status-insert { color: var(--color-brand-purple); font-style: italic; }
+        .status-unspoken { color: var(--color-text-secondary); }
+        #score-display, #resume-modal {
+            transition: opacity 0.3s ease-in-out, transform 0.3s ease-in-out;
+        }
+        #score-display {
+            background-color: rgba(13, 17, 23, 0.7);
+            backdrop-filter: blur(4px);
+        }
+        #mic-wave {
+            transition: visibility 0.1s;
+        }
+        #target-sentence.long {
+            font-size: 2.25rem; /* 3xl */
+        }
+        @media (min-width: 768px) {
+            #target-sentence.long {
+                font-size: 3rem; /* 5xl -> 4xl */
+            }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .pulse-animation {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="antialiased">
+    <div class="aurora-bg"></div>
+
+    <!-- Screen 1: Course Packs -->
+    <div id="screen-packs" class="screen flex-col items-center justify-center p-4 sm:p-8">
+        <div class="text-center mb-12">
+            <h1 class="text-5xl sm:text-6xl font-black text-white">Echo<span class="text-blue-400">Verse</span></h1>
+            <p class="text-xl text-gray-400 mt-3">你的个人发音教练。</p>
+        </div>
+        <div id="packs-container" class="w-full max-w-md"></div>
+    </div>
+
+    <!-- Screen 2: Lessons -->
+    <div id="screen-lessons" class="screen flex-col items-center p-4 sm:p-8">
+        <div class="w-full max-w-2xl">
+            <header class="flex items-center mb-8">
+                <button id="lessons-back-btn" class="p-2 rounded-full hover:bg-gray-700 mr-4 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+                </button>
+                <h2 id="lessons-title" class="text-3xl font-bold text-white">课程</h2>
+            </header>
+            <div id="lessons-container" class="space-y-4"></div>
+        </div>
+    </div>
+
+    <!-- Screen 3: Training -->
+    <div id="screen-training" class="screen flex-col items-center justify-between p-4 h-screen">
+        <header class="w-full max-w-4xl flex items-center pt-4 gap-4">
+            <button id="training-back-btn" class="p-2 rounded-full hover:bg-gray-700 transition-colors">
+                 <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+            </button>
+            <div id="progress-dots-container" class="progress-dots-container"></div>
+        </header>
+
+        <main class="w-full max-w-4xl flex flex-col items-center justify-center text-center flex-grow relative">
+            <div id="score-display" class="absolute inset-0 flex items-center justify-center opacity-0 pointer-events-none transform scale-95">
+                <div>
+                    <p id="score-text" class="text-9xl font-black"></p>
+                    <p id="score-feedback" class="text-2xl font-semibold mt-4"></p>
+                </div>
+            </div>
+            <div class="w-full px-4">
+                <div class="flex items-center justify-center group" style="min-height: 140px;">
+                    <div class="flex-1"></div>
+                    <p id="target-sentence" class="text-4xl md:text-5xl font-bold text-white leading-relaxed text-center"></p>
+                    <div class="flex-1 flex justify-start pl-4">
+                        <button id="read-aloud-btn" title="朗读句子" class="p-3 rounded-full bg-white/5 opacity-0 group-hover:opacity-100 hover:bg-white/10 transition-all">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-gray-300" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM14.657 2.929a1 1 0 011.414 0A9.972 9.972 0 0119 10a9.972 9.972 0 01-2.929 7.071 1 1 0 01-1.414-1.414A7.971 7.971 0 0017 10c0-2.21-.894-4.208-2.343-5.657a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <p id="user-speech" class="mt-8 text-3xl md:text-4xl font-medium text-gray-500 min-h-[3.5rem] leading-relaxed"></p>
+            </div>
+        </main>
+
+        <footer class="w-full max-w-4xl flex flex-col items-center pb-8 space-y-4">
+            <canvas id="mic-wave" class="w-full h-20" style="visibility: hidden;"></canvas>
+            <p id="status-text" class="text-xl font-medium text-blue-300"></p>
+        </footer>
+    </div>
+
+    <!-- Screen 4: Results -->
+    <div id="screen-results" class="screen flex-col items-center justify-center p-4 sm:p-8 text-center">
+        <div class="w-full max-w-2xl">
+            <h2 id="results-title" class="text-3xl font-bold text-white">课程完成！</h2>
+            <p class="text-gray-400 mt-2">平均分</p>
+            <p id="final-avg-score" class="text-9xl font-black my-4 text-white"></p>
+            <div id="reinforcement-container" class="mt-12 text-left w-full">
+                <h3 class="text-xl font-bold text-white mb-4">强化包</h3>
+                <p class="text-gray-400 mb-4">练习您觉得有挑战性的句子。</p>
+                <div id="reinforcement-list" class="space-y-3"></div>
+                <button id="reinforcement-btn" class="mt-6 w-full text-lg font-semibold bg-yellow-600 text-white py-3 px-8 rounded-lg hover:bg-yellow-700 transition-colors shadow-lg shadow-yellow-600/20">开始加强练习</button>
+            </div>
+            <button id="results-done-btn" class="mt-12 text-lg font-semibold bg-blue-600 text-white py-3 px-8 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-600/20">完成</button>
+        </div>
+    </div>
+
+    <!-- Modal for resuming progress -->
+    <div id="resume-modal" class="fixed inset-0 bg-black bg-opacity-80 backdrop-filter backdrop-blur-sm flex items-center justify-center p-4 opacity-0 pointer-events-none z-50">
+        <div class="bg-gray-800/80 border border-gray-700 rounded-lg p-8 shadow-2xl w-full max-w-sm text-center transform scale-95">
+            <h3 class="text-2xl font-bold text-white mb-4">继续学习?</h3>
+            <p class="text-gray-300 mb-8">我们检测到您有未完成的练习记录。</p>
+            <div class="flex justify-between space-x-4">
+                <button id="restart-btn" class="w-full py-3 font-semibold rounded-lg bg-gray-600 hover:bg-gray-700 transition-colors">重新开始</button>
+                <button id="resume-btn" class="w-full py-3 font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 transition-colors">继续学习</button>
+            </div>
+        </div>
+    </div>
+
+<script defer>
+// --- NEW: CMU-based Phoneme Comparison Engine with Sequence Alignment ---
+const PhonemeComparer = {
+    cmuDict: { "a": "AH", "about": "AH B AW T", "absolutely": "AE B S AH L UW T L IY", "ago": "AH G OW", "appreciate": "AH P R IY SH IY EY T", "are": "AA R", "arm": "AA R M", "at": "AE T", "attached": "AH T AE CH T", "badly": "B AE D L IY", "beautiful": "B Y UW T AH F AH L", "before": "B IH F AO R", "believed": "B IH L IY V D", "brother": "B R AH DH ER", "broken": "B R OW K AH N", "by": "B AY", "call": "K AA L", "can": "K AE N", "check": "CH EH K", "cheese": "CH IY Z", "coffee": "K AA F IY", "comments": "K AA M EH N T S", "copper": "K AA P ER", "could": "K UH D", "cup": "K AH P", "day": "D EY", "deadline": "D EH D L AY N", "delicious": "D IH L IH SH AH S", "do": "D UW", "document": "D AA K Y AH M AH N T", "doing": "D UW IH NG", "does": "D AH Z", "elbow": "EH L B OW", "english": "IH NG G L IH SH", "find": "F AY N D", "focus": "F OW K AH S", "for": "F AO R", "friday": "F R AY D IY", "from": "F R AH M", "future": "F Y UW CH ER", "gatsby": "G AE T S B IY", "get": "G EH T", "got": "G AA T", "green": "G R IY N", "have": "HH AE V", "having": "HH AE V IH NG", "he": "HH IY", "hearing": "HH IH R IH NG", "hello": "HH AH L OW", "help": "HH EH L P", "his": "HH IH Z", "how": "HH AW", "i": "AY", "in": "IH N", "inquire": "IH N K W AY R", "is": "IH Z", "ishmael": "IH SH M EY AH L", "isn't": "IH Z AH N T", "it": "IH T", "jem": "JH EH M", "key": "K IY", "let's": "L EH T S", "light": "L AY T", "like": "L AY K", "little": "L IH T AH L", "look": "L UH K", "lorry": "L AO R IY", "me": "M IY", "money": "M AH N IY", "my": "M AY", "name": "N EY M", "nearly": "N IH R L IY", "need": "N IY D", "next": "N EH K S T", "no": "N OW", "objectives": "AH B JH EH K T IH V Z", "of": "AH V", "on": "AA N", "options": "AA P SH AH N Z", "or": "AO R", "orgastic": "AO R G AE S T IH K", "our": "AW ER", "part": "P AA R T", "plans": "P L AE N Z", "please": "P L IY Z", "pot": "P AA T", "presentation": "P R EH Z AH N T EY SH AH N", "project": "P R AA JH EH K T", "proper": "P R AA P ER", "purse": "P ER S", "questions": "K W EH S CH AH N Z", "really": "R IH L IY", "recedes": "R IH S IY D Z", "red": "R EH D", "review": "R IY V Y UW", "sail": "S EY L", "see": "S IY", "sees": "S IY Z", "services": "S ER V AH S AH Z", "she": "SH IY", "so": "S OW", "some": "S AH M", "soon": "S UW N", "speak": "S P IY K", "started": "S T AA R T AH D", "thank": "TH AE NG K", "that": "DH AE T", "the": "DH AH", "this": "DH IH S", "thought": "TH AO T", "thirteen": "TH ER T IY N", "time": "T AY M", "to": "T UW", "today": "T UW D EY", "us": "AH S", "vegetarian": "V EH JH AH T EH R IY AH N", "was": "W AA Z", "watery": "W AO T ER IY", "we": "W IY", "weekend": "W IY K EH N D", "what": "W AH T", "when": "W EH N", "where": "W EH R", "with": "W IH DH", "world": "W ER L D", "would": "W UH D", "writing": "R AY T IH NG", "year": "Y IH R", "yellow": "Y EH L OW", "you": "Y UW", "your": "Y AO R" },
+    levenshtein(a, b) {
+        if (a.length === 0) return b.length;
+        if (b.length === 0) return a.length;
+        const matrix = [];
+        for (let i = 0; i <= b.length; i++) { matrix[i] = [i]; }
+        for (let j = 0; j <= a.length; j++) { matrix[0][j] = j; }
+        for (let i = 1; i <= b.length; i++) {
+            for (let j = 1; j <= a.length; j++) {
+                if (b[i - 1] === a[j - 1]) {
+                    matrix[i][j] = matrix[i - 1][j - 1];
+                } else {
+                    matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j] + 1);
+                }
+            }
+        }
+        return matrix[b.length][a.length];
+    },
+    getPhonemes(word) {
+        return this.cmuDict[word.toLowerCase().replace(/[.,!?]/g, '')] || null;
+    },
+    compareWords(userWord, targetWord) {
+        const userPhonemes = this.getPhonemes(userWord);
+        const targetPhonemes = this.getPhonemes(targetWord);
+        if (!userPhonemes || !targetPhonemes) {
+            return userWord.toLowerCase() === targetWord.toLowerCase() ? 100 : 0;
+        }
+        const distance = this.levenshtein(userPhonemes.split(' '), targetPhonemes.split(' '));
+        const maxLen = Math.max(userPhonemes.split(' ').length, targetPhonemes.split(' ').length);
+        const similarity = Math.max(0, (1 - distance / maxLen));
+        return Math.round(similarity * 100);
+    },
+    analyze(userText, targetText) {
+        return new Promise(resolve => {
+            if (!userText || !targetText) {
+                resolve({ overallAccuracy: 0, readingProgress: 0, words: [] });
+                return;
+            }
+
+            const userWords = userText.toLowerCase().trim().split(/\s+/).filter(w => w);
+            const targetWords = targetText.toLowerCase().replace(/[.,!?]/g, '').trim().split(/\s+/).filter(w => w);
+            
+            const M = userWords.length;
+            const N = targetWords.length;
+            const GAP_PENALTY = -25;
+
+            const dp = Array(M + 1).fill(null).map(() => Array(N + 1).fill(0));
+            const path = Array(M + 1).fill(null).map(() => Array(N + 1).fill(null));
+
+            for (let i = 1; i <= M; i++) { dp[i][0] = i * GAP_PENALTY; path[i][0] = 'up'; }
+            for (let j = 1; j <= N; j++) { dp[0][j] = j * GAP_PENALTY; path[0][j] = 'left'; }
+
+            for (let i = 1; i <= M; i++) {
+                for (let j = 1; j <= N; j++) {
+                    const matchScore = this.compareWords(userWords[i - 1], targetWords[j - 1]);
+                    const scoreDiag = dp[i - 1][j - 1] + matchScore;
+                    const scoreUp = dp[i - 1][j] + GAP_PENALTY;
+                    const scoreLeft = dp[i][j - 1] + GAP_PENALTY;
+
+                    if (scoreDiag >= scoreUp && scoreDiag >= scoreLeft) {
+                        dp[i][j] = scoreDiag;
+                        path[i][j] = 'diag';
+                    } else if (scoreUp > scoreLeft) {
+                        dp[i][j] = scoreUp;
+                        path[i][j] = 'up';
+                    } else {
+                        dp[i][j] = scoreLeft;
+                        path[i][j] = 'left';
+                    }
+                }
+            }
+
+            let i = M, j = N;
+            const alignment = [];
+            const targetScores = new Array(N).fill(0);
+            let lastAlignedTargetIndex = -1;
+
+            while (i > 0 || j > 0) {
+                const direction = path[i][j];
+                if (direction === 'diag') {
+                    const uWord = userWords[i - 1];
+                    const tWord = targetWords[j - 1];
+                    const score = this.compareWords(uWord, tWord);
+                    const status = score >= 90 ? 'match' : 'substitute';
+                    alignment.unshift({ word: uWord, status: status, target: tWord });
+                    targetScores[j - 1] = score;
+                    if (lastAlignedTargetIndex === -1) lastAlignedTargetIndex = j - 1;
+                    i--; j--;
+                } else if (direction === 'up') {
+                    alignment.unshift({ word: userWords[i - 1], status: 'insert' });
+                    i--;
+                } else { 
+                    j--;
+                }
+            }
+            
+            const scoreSum = targetScores.reduce((a, b) => a + b, 0);
+            const overallAccuracy = N > 0 ? Math.round(scoreSum / N) : 0;
+            const readingProgress = N > 0 ? (lastAlignedTargetIndex + 1) / N : 0;
+            
+            resolve({ overallAccuracy, readingProgress, words: alignment });
+        });
+    }
+};
+
+const Templates = {
+    packCategory: (category) => `
+        <h2 class="text-xl font-bold text-gray-300 mb-3 mt-6 first:mt-0">${category.name}</h2>
+        <div class="space-y-4">
+            ${category.packs.map(pack => Templates.packCard(pack)).join('')}
+        </div>
+    `,
+    packCard: (pack) => `
+        <div class="card p-6 flex items-center space-x-6 cursor-pointer" data-pack-id="${pack.id}">
+            <div class="text-4xl pointer-events-none">${pack.icon}</div>
+            <div class="flex-grow pointer-events-none">
+                <h3 class="text-xl font-bold text-white">${pack.name}</h3>
+                <p class="text-gray-400">${pack.lessons.length} 节课</p>
+            </div>
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-500 pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+        </div>
+    `,
+    lessonCard: (lesson, progress) => {
+        let progressHTML = `<p class="text-sm text-gray-400">${lesson.sentences.length} 个句子</p>`;
+        let buttonContent = '学习';
+        if (progress) {
+            const completedCount = progress.scores.filter(s => s >= 0).length;
+            const isCompleted = completedCount === lesson.sentences.length;
+            if (isCompleted) {
+                progressHTML = `<p class="text-sm text-green-400 font-semibold">已完成</p>`;
+                buttonContent = `最高分: ${progress.averageScore}`;
+            } else if (completedCount > 0) {
+                progressHTML = ``;
+                buttonContent = `进度: ${completedCount}/${lesson.sentences.length}`;
+            }
+        }
+        return `
+            <div class="card p-5 flex items-center justify-between space-x-4 cursor-pointer" data-lesson-id="${lesson.id}">
+                <div class="flex-grow pointer-events-none">
+                    <h4 class="text-lg font-semibold text-white">${lesson.name}</h4>
+                    ${progressHTML}
+                </div>
+                <div class="text-right pointer-events-none">
+                    <button class="py-2 px-5 font-semibold rounded-md bg-blue-600 hover:bg-blue-700 transition-colors">${buttonContent}</button>
+                </div>
+            </div>`;
+    }
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+    const EchoVerseApp = {
+        CONFIG: {
+            DB_KEY: 'echoVerseProgress', REINFORCEMENT_LESSON_ID: 'reinforcement-temp',
+            GOOD_SCORE_THRESHOLD: 85,
+            NO_SPEECH_RETRY_LIMIT: 3, SPEECH_LANG: 'en-US',
+            SENTENCE_LENGTH_THRESHOLD_FOR_FONT_SCALING: 50,
+            CSS_CLASSES: { STATUS_MATCH: 'status-match', STATUS_SUBSTITUTE: 'status-substitute', STATUS_INSERT: 'status-insert', STATUS_UNSPOKEN: 'status-unspoken' }
+        },
+        courseData: {
+            categories: [
+                { name: '日常生活类', packs: [
+                    { id: 'pack1', name: '常用短语', icon: '🗣️', lessons: [
+                        { id: 'lesson1a', name: '日常问候', sentences: [ "Hello, how are you doing today?", "It's a beautiful day, isn't it?", "What are your plans for the weekend?", "Could you please help me with this?", "Thank you so much, I really appreciate it." ]},
+                        { id: 'lesson1b', name: '点餐', sentences: [ "I would like to have a cup of coffee.", "Can I get the check, please?", "Do you have any vegetarian options?", "This is absolutely delicious." ]},
+                        { id: 'lesson1c', name: '提问', sentences: [ "What is your name?", "Where are you from?", "How can I help you?", "Can you speak English?", "What time is it?" ]}
+                    ]},
+                    { id: 'pack4', name: '简单绕口令', icon: '🤪', lessons: [ { id: 'lesson4a', name: '初级挑战', sentences: [ "Red lorry, yellow lorry.", "A proper copper coffee pot.", "She sees cheese." ]} ]}
+                ]},
+                { name: '商务类', packs: [
+                    { id: 'pack2', name: '商务英语', icon: '💼', lessons: [
+                        { id: 'lesson2a', name: '会议和演讲', sentences: [ "Let's get started with the presentation.", "Does anyone have any questions or comments?", "We need to focus on our key objectives.", "The deadline for this project is next Friday." ]},
+                        { id: 'lesson2b', name: '商务邮件', sentences: [ "I am writing to inquire about your services.", "Please find the attached document for your review.", "I look forward to hearing from you soon." ]}
+                    ]}
+                ]},
+                { name: '文学类', packs: [
+                    { id: 'pack5', name: '文学经典', icon: '📚', lessons: [
+                        { id: 'lesson5a', name: '《白鲸》', sentences: [ "Call me Ishmael. Some years ago, having little or no money in my purse, I thought I would sail about a little and see the watery part of the world." ]},
+                        { id: 'lesson5b', name: '《杀死一只知更鸟》', sentences: [ "When he was nearly thirteen, my brother Jem got his arm badly broken at the elbow." ]},
+                        { id: 'lesson5c', 'name': '《了不起的盖茨比》', sentences: [ "Gatsby believed in the green light, the orgastic future that year by year recedes before us." ]}
+                    ]}
+                ]}
+            ]
+        },
+        state: {
+            currentPack: null, currentLesson: null, currentSentenceIndex: 0,
+            lessonScores: [], isReinforcementMode: false, isRecognizing: false,
+            recognitionEndedDueToError: false, noSpeechErrorCount: 0,
+            rawTranscriptForScoring: '', endSpeechTimeout: null, isSentenceFinished: false,
+        },
+        ui: {},
+        apis: {
+            SpeechRecognition: window.SpeechRecognition || window.webkitSpeechRecognition,
+            recognition: null, audioContext: null, analyser: null,
+            micStreamSource: null, visualizerFrameId: null,
+        },
+        init() {
+            if (!this.apis.SpeechRecognition) {
+                alert("抱歉，您的浏览器不支持语音识别功能。请尝试使用最新版的 Chrome 或 Edge 浏览器。");
+                return;
+            }
+            this.cacheUIElements();
+            this.bindEvents();
+            this.renderPacks();
+            this.showScreen('packs');
+        },
+        cacheUIElements() {
+            const ids = [
+                'screen-packs', 'screen-lessons', 'screen-training', 'screen-results', 'packs-container', 
+                'lessons-container', 'lessons-title', 'training-back-btn', 'progress-dots-container', 
+                'score-display', 'score-text', 'score-feedback', 'target-sentence', 'read-aloud-btn', 
+                'user-speech', 'mic-wave', 'status-text', 'results-title', 'final-avg-score', 
+                'reinforcement-container', 'reinforcement-list', 'reinforcement-btn', 'results-done-btn', 
+                'resume-modal', 'restart-btn', 'resume-btn', 'lessons-back-btn'
+            ];
+            ids.forEach(id => {
+                const camelCaseId = id.replace(/-(\w)/g, (_, letter) => letter.toUpperCase());
+                this.ui[camelCaseId] = document.getElementById(id);
+            });
+            this.ui.waveCanvasCtx = this.ui.micWave.getContext('2d');
+            this.ui.progressDots = [];
+            this.ui.targetWordSpans = [];
+        },
+        bindEvents() {
+            this.ui.lessonsBackBtn.addEventListener('click', () => { this.renderPacks(); this.showScreen('packs'); });
+            this.ui.trainingBackBtn.addEventListener('click', () => this.exitTraining());
+            this.ui.resultsDoneBtn.addEventListener('click', () => { this.renderPacks(); this.showScreen('packs'); });
+            this.ui.readAloudBtn.addEventListener('click', () => this.speakAndRestart(this.state.currentLesson.sentences[this.state.currentSentenceIndex]));
+            
+            this.ui.packsContainer.addEventListener('click', this.handlePackSelection.bind(this));
+            this.ui.lessonsContainer.addEventListener('click', this.handleLessonSelection.bind(this));
+            this.ui.targetSentence.addEventListener('click', this.handleWordSpeak.bind(this));
+            this.ui.progressDotsContainer.addEventListener('click', this.handleDotSelection.bind(this));
+        },
+        handlePackSelection(event) {
+            const card = event.target.closest('.card[data-pack-id]');
+            if (!card) return;
+            const packId = card.dataset.packId;
+            const pack = this.courseData.categories.flatMap(c => c.packs).find(p => p.id === packId);
+            if (pack) {
+                this.state.currentPack = pack;
+                this.renderLessons();
+                this.showScreen('lessons');
+            }
+        },
+        handleLessonSelection(event) {
+            const card = event.target.closest('.card[data-lesson-id]');
+            if (!card) return;
+            const lessonId = card.dataset.lessonId;
+            const lesson = this.state.currentPack.lessons.find(l => l.id === lessonId);
+            if (lesson) {
+                const savedProgress = this.storage.loadProgress(lesson.id);
+                if (savedProgress && !savedProgress.scores.every(s => s >= 0)) {
+                    this.showResumeModal(lesson);
+                } else {
+                    this.startTraining(lesson, false);
+                }
+            }
+        },
+        handleWordSpeak(event) {
+            const wordSpan = event.target.closest('span[data-word]');
+            if (wordSpan && wordSpan.dataset.word) {
+                this.speakAndRestart(wordSpan.dataset.word);
+            }
+        },
+        handleDotSelection(event) {
+            const dot = event.target.closest('.progress-dot[data-index]');
+            if (dot && this.state.lessonScores[dot.dataset.index] < this.CONFIG.GOOD_SCORE_THRESHOLD) {
+                this.exitTraining(false);
+                this.state.currentSentenceIndex = parseInt(dot.dataset.index, 10);
+                this.startNextSentence();
+            }
+        },
+        showScreen(screenId) {
+            Object.keys(this.ui).filter(key => key.startsWith('screen')).forEach(key => this.ui[key].classList.remove('active'));
+            this.ui[`screen${screenId.charAt(0).toUpperCase() + screenId.slice(1)}`].classList.add('active');
+        },
+        showResumeModal(lesson) {
+            this.ui.resumeModal.classList.remove('opacity-0', 'pointer-events-none');
+            this.ui.resumeModal.querySelector('div').classList.remove('scale-95');
+            this.ui.resumeBtn.onclick = () => { this.hideResumeModal(); this.startTraining(lesson, true); };
+            this.ui.restartBtn.onclick = () => { this.hideResumeModal(); this.storage.clearProgress(lesson.id); this.startTraining(lesson, false); };
+        },
+        hideResumeModal() {
+            this.ui.resumeModal.classList.add('opacity-0', 'pointer-events-none');
+            this.ui.resumeModal.querySelector('div').classList.add('scale-95');
+        },
+        renderPacks() {
+            const content = this.courseData.categories.map(Templates.packCategory).join('');
+            this.ui.packsContainer.innerHTML = content;
+        },
+        renderLessons() {
+            this.ui.lessonsTitle.textContent = this.state.currentPack.name;
+            const content = this.state.currentPack.lessons.map(lesson => {
+                const progress = this.storage.loadProgress(lesson.id);
+                return Templates.lessonCard(lesson, progress);
+            }).join('');
+            this.ui.lessonsContainer.innerHTML = content;
+        },
+        updateFeedbackUI(analysis) {
+            const userWordContainer = document.createElement('div');
+            analysis.words.forEach(word => {
+                const span = document.createElement('span');
+                span.textContent = word.word + ' ';
+                span.className = this.CONFIG.CSS_CLASSES[`STATUS_${word.status.toUpperCase()}`] || '';
+                userWordContainer.appendChild(span);
+            });
+            this.ui.userSpeech.innerHTML = '';
+            this.ui.userSpeech.appendChild(userWordContainer);
+
+            const { STATUS_UNSPOKEN, STATUS_MATCH, STATUS_SUBSTITUTE } = this.CONFIG.CSS_CLASSES;
+            const baseSpanClass = 'cursor-pointer hover:bg-gray-800/50 rounded-md px-1 transition-colors';
+
+            this.ui.targetWordSpans.forEach(span => {
+                span.className = `${STATUS_UNSPOKEN} ${baseSpanClass}`;
+            });
+
+            const targetWordsOriginal = this.ui.targetWordSpans.map(span => span.dataset.word.toLowerCase());
+            const matchedTargetIndices = new Set();
+
+            analysis.words.forEach(wordAnalysis => {
+                if (wordAnalysis.target && wordAnalysis.status !== 'insert') {
+                    let targetIndex = -1;
+                    for (let i = 0; i < targetWordsOriginal.length; i++) {
+                        if (targetWordsOriginal[i] === wordAnalysis.target.toLowerCase() && !matchedTargetIndices.has(i)) {
+                            targetIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (targetIndex > -1) {
+                        matchedTargetIndices.add(targetIndex);
+                        const span = this.ui.targetWordSpans[targetIndex];
+                        const statusClass = wordAnalysis.status === 'match' ? STATUS_MATCH : STATUS_SUBSTITUTE;
+                        span.className = `${statusClass} ${baseSpanClass}`;
+                    }
+                }
+            });
+        },
+        renderProgressDots() {
+            this.ui.progressDotsContainer.innerHTML = '';
+            this.ui.progressDots = [];
+            for (let i = 0; i < this.state.currentLesson.sentences.length; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'progress-dot';
+                dot.dataset.index = i;
+                this.ui.progressDotsContainer.appendChild(dot);
+                this.ui.progressDots.push(dot);
+            }
+            this.updateProgressDots();
+        },
+        updateProgressDots() {
+            this.ui.progressDots.forEach((dot, i) => {
+                const score = this.state.lessonScores[i];
+                dot.classList.remove('current', 'good', 'bad');
+                if (i === this.state.currentSentenceIndex) dot.classList.add('current');
+                if (score === -1) {
+                    dot.title = '未练习';
+                } else {
+                    dot.classList.add(score < this.CONFIG.GOOD_SCORE_THRESHOLD ? 'bad' : 'good');
+                    dot.title = `分数: ${score}${score < this.CONFIG.GOOD_SCORE_THRESHOLD ? ' - 点击重试' : ''}`;
+                }
+            });
+        },
+        startTraining(lesson, resume = false) {
+            this.state.currentLesson = lesson;
+            this.state.isReinforcementMode = lesson.id === this.CONFIG.REINFORCEMENT_LESSON_ID;
+            const savedProgress = this.storage.loadProgress(lesson.id);
+            if (resume && savedProgress) {
+                this.state.currentSentenceIndex = savedProgress.lastIndex;
+                this.state.lessonScores = savedProgress.scores;
+            } else {
+                if (savedProgress && !this.state.isReinforcementMode) this.storage.clearProgress(lesson.id);
+                this.state.currentSentenceIndex = 0;
+                this.state.lessonScores = Array(lesson.sentences.length).fill(-1);
+            }
+            this.showScreen('training');
+            this.renderProgressDots();
+            this.startNextSentence();
+        },
+        startNextSentence() {
+            if (this.state.currentSentenceIndex >= this.state.currentLesson.sentences.length) {
+                this.finishLesson();
+                return;
+            }
+
+            const { currentLesson, currentSentenceIndex } = this.state;
+            const { targetSentence, userSpeech, scoreDisplay, statusText } = this.ui;
+            const { SENTENCE_LENGTH_THRESHOLD_FOR_FONT_SCALING, CSS_CLASSES } = this.CONFIG;
+
+            this.state.isSentenceFinished = false;
+            this.speech.initializeRecognition();
+            this.state.noSpeechErrorCount = 0;
+            this.state.rawTranscriptForScoring = '';
+            scoreDisplay.classList.add('opacity-0', 'pointer-events-none', 'scale-95');
+
+            const targetText = currentLesson.sentences[currentSentenceIndex];
+            targetSentence.classList.toggle('long', targetText.length > SENTENCE_LENGTH_THRESHOLD_FOR_FONT_SCALING);
+
+            const targetWords = targetText.replace(/[.,!?]/g, '').trim().split(/\s+/);
+            const targetFragment = document.createDocumentFragment();
+            this.ui.targetWordSpans = [];
+            targetWords.forEach(word => {
+                const span = document.createElement('span');
+                span.textContent = word + ' ';
+                span.className = `${CSS_CLASSES.STATUS_UNSPOKEN} cursor-pointer hover:bg-gray-800/50 rounded-md px-1 transition-colors`;
+                span.dataset.word = word;
+                targetFragment.appendChild(span);
+                this.ui.targetWordSpans.push(span);
+            });
+            targetSentence.innerHTML = '';
+            targetSentence.appendChild(targetFragment);
+            
+            userSpeech.textContent = '';
+            this.updateProgressDots();
+            statusText.textContent = '请仔细听...';
+            statusText.classList.remove('pulse-animation');
+
+            this.speech.speak(targetText, () => {
+                if (this.state.currentSentenceIndex === currentSentenceIndex) {
+                    this.startUserFollowRead();
+                }
+            });
+        },
+        async startUserFollowRead() {
+            if (this.state.isRecognizing) return;
+            this.state.recognitionEndedDueToError = false;
+            if (!this.apis.audioContext) await this.audio.setupVisualizer();
+            this.audio.startMicAnimation();
+            if (this.state.noSpeechErrorCount === 0) {
+                 this.ui.statusText.textContent = '到你了，请说！';
+            }
+            this.ui.statusText.classList.add('pulse-animation');
+            this.speech.startRecognition();
+        },
+        speakAndRestart(textToSpeak) {
+            this.speech.stopRecognition();
+            clearTimeout(this.state.endSpeechTimeout);
+            this.state.endSpeechTimeout = null;
+            this.startNextSentence();
+            
+            const currentIndex = this.state.currentSentenceIndex;
+            setTimeout(() => {
+                this.speech.speak(textToSpeak, () => {
+                    if (this.state.currentSentenceIndex === currentIndex) {
+                        this.startUserFollowRead();
+                    }
+                });
+            }, 100);
+        },
+        async finishSentence() {
+            const { isSentenceFinished, rawTranscriptForScoring, currentLesson, currentSentenceIndex, lessonScores } = this.state;
+            const { scoreText, scoreFeedback, scoreDisplay } = this.ui;
+            const { GOOD_SCORE_THRESHOLD } = this.CONFIG;
+
+            if (isSentenceFinished) return;
+            this.state.isSentenceFinished = true;
+            this.speech.stopRecognition();
+            clearTimeout(this.state.endSpeechTimeout);
+            this.state.endSpeechTimeout = null;
+
+            const transcriptToScore = rawTranscriptForScoring.trim();
+            const targetText = currentLesson.sentences[currentSentenceIndex];
+            
+            const finalAnalysis = await PhonemeComparer.analyze(transcriptToScore, targetText);
+            
+            this.state.lessonScores[currentSentenceIndex] = Math.max(lessonScores[currentSentenceIndex], finalAnalysis.overallAccuracy);
+            this.storage.saveProgress(currentLesson.id, this.state.lessonScores, currentSentenceIndex);
+            
+            this.updateFeedbackUI(finalAnalysis);
+            this.updateProgressDots();
+            
+            const isGoodScore = finalAnalysis.overallAccuracy >= GOOD_SCORE_THRESHOLD;
+            scoreText.textContent = `${finalAnalysis.overallAccuracy}`;
+            scoreText.className = `text-9xl font-black ${isGoodScore ? 'text-blue-400' : 'text-red-400'}`;
+            scoreFeedback.textContent = isGoodScore ? '非常棒！' : '我们再试一次吧！';
+            scoreFeedback.className = `text-2xl font-semibold ${isGoodScore ? 'text-blue-300' : 'text-red-300'}`;
+            scoreDisplay.classList.remove('opacity-0', 'pointer-events-none', 'scale-95');
+
+            setTimeout(() => {
+                if (isGoodScore) {
+                    this.state.currentSentenceIndex++;
+                }
+                this.startNextSentence();
+            }, 2500);
+        },
+        finishLesson() {
+            const { lessonScores, currentLesson, isReinforcementMode } = this.state;
+            const { finalAvgScore, reinforcementContainer, reinforcementList, reinforcementBtn, resultsTitle } = this.ui;
+            const { GOOD_SCORE_THRESHOLD, REINFORCEMENT_LESSON_ID } = this.CONFIG;
+
+            const validScores = lessonScores.filter(s => s >= 0);
+            const avgScore = validScores.length > 0 ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 0;
+            
+            finalAvgScore.textContent = avgScore;
+            finalAvgScore.className = `text-9xl font-black my-4 ${avgScore >= GOOD_SCORE_THRESHOLD ? 'text-blue-400' : 'text-yellow-400'}`;
+            
+            const reinforcementSentences = [];
+            reinforcementList.innerHTML = '';
+            currentLesson.sentences.forEach((sentence, index) => {
+                const score = lessonScores[index];
+                if (score >= 0 && score < GOOD_SCORE_THRESHOLD) {
+                    reinforcementSentences.push(sentence);
+                    const item = document.createElement('div');
+                    item.className = 'bg-gray-800/50 p-3 rounded-lg flex justify-between items-center';
+                    item.innerHTML = `<p class="text-gray-300">${sentence}</p><span class="font-bold text-red-400">${score}</span>`;
+                    reinforcementList.appendChild(item);
+                }
+            });
+
+            const hasReinforcement = reinforcementSentences.length > 0;
+            reinforcementContainer.style.display = hasReinforcement ? 'block' : 'none';
+            if (hasReinforcement) {
+                reinforcementBtn.onclick = () => {
+                    this.startTraining({ id: REINFORCEMENT_LESSON_ID, name: '强化练习', sentences: reinforcementSentences });
+                };
+            }
+            resultsTitle.textContent = isReinforcementMode ? '强化练习完成！' : '课程完成！';
+            this.showScreen('results');
+        },
+        exitTraining(showLessonsScreen = true) {
+            this.speech.stopRecognition();
+            clearTimeout(this.state.endSpeechTimeout);
+            window.speechSynthesis.cancel();
+            if (showLessonsScreen) {
+                this.renderLessons();
+                this.showScreen('lessons');
+            }
+        },
+        dynamicTimeoutUpdate(analysisResult) {
+            clearTimeout(this.state.endSpeechTimeout);
+            const baseWait = 8000, minWait = 2000;
+            let newWaitTime = baseWait;
+            if (analysisResult.readingProgress >= 1) {
+                const targetWords = this.state.currentLesson.sentences[this.state.currentSentenceIndex].split(' ').length;
+                const userWords = analysisResult.words.length;
+                const ratio = Math.min(userWords, targetWords) / Math.max(userWords, targetWords);
+                newWaitTime = minWait + ((1 - ratio) * 4000);
+            } else if (analysisResult.readingProgress > 0) {
+                newWaitTime = baseWait - (analysisResult.overallAccuracy * 50);
+            }
+            const finalWaitTime = Math.max(minWait, newWaitTime);
+            this.state.endSpeechTimeout = setTimeout(() => {
+                if (this.state.rawTranscriptForScoring.trim()) {
+                    this.finishSentence();
+                } else {
+                    this.speech.stopRecognition();
+                    this.ui.statusText.textContent = "好像没听到声音，再试一次吧。";
+                    setTimeout(() => this.startNextSentence(), 2000);
+                }
+            }, finalWaitTime);
+        },
+        speech: {
+            parent: null,
+            initializeRecognition() {
+                if (this.parent.apis.recognition) { this.parent.apis.recognition.abort(); }
+                this.parent.apis.recognition = new this.parent.apis.SpeechRecognition();
+                Object.assign(this.parent.apis.recognition, {
+                    continuous: true, interimResults: true, lang: this.parent.CONFIG.SPEECH_LANG,
+                    onresult: this.onResult.bind(this), onend: this.onEnd.bind(this), onerror: this.onError.bind(this),
+                });
+            },
+            startRecognition() { try { this.parent.apis.recognition.start(); this.parent.state.isRecognizing = true; } catch(e) { console.error("语音识别启动失败: ", e); this.parent.state.isRecognizing = false; } },
+            stopRecognition() { if (this.parent.state.isRecognizing && this.parent.apis.recognition) { this.parent.apis.recognition.stop(); } },
+            speak(text, onEndCallback) { window.speechSynthesis.cancel(); const utterance = new SpeechSynthesisUtterance(text); utterance.lang = this.parent.CONFIG.SPEECH_LANG; utterance.onend = onEndCallback; window.speechSynthesis.speak(utterance); },
+            async onResult(event) {
+                if (this.parent.state.isSentenceFinished) return;
+                this.parent.ui.statusText.textContent = '';
+                this.parent.state.noSpeechErrorCount = 0;
+                let rawTranscript = '';
+                for (let i = 0; i < event.results.length; ++i) { rawTranscript += event.results[i][0].transcript; }
+                this.parent.state.rawTranscriptForScoring = rawTranscript;
+                if (rawTranscript) {
+                    const targetText = this.parent.state.currentLesson.sentences[this.parent.state.currentSentenceIndex];
+                    const analysis = await PhonemeComparer.analyze(rawTranscript, targetText);
+                    if (this.parent.state.isSentenceFinished) return;
+                    this.parent.updateFeedbackUI(analysis);
+                    if (analysis.overallAccuracy >= 98) { this.parent.finishSentence(); return; }
+                    this.parent.dynamicTimeoutUpdate(analysis);
+                }
+            },
+            onEnd() {
+                this.parent.state.isRecognizing = false;
+                this.parent.audio.stopMicAnimation();
+                this.parent.ui.statusText.classList.remove('pulse-animation');
+                if (!this.parent.state.endSpeechTimeout && !this.parent.state.recognitionEndedDueToError) { if (this.parent.state.noSpeechErrorCount === 0) { this.parent.ui.statusText.textContent = '处理中...'; } }
+            },
+            onError(event) {
+                this.parent.state.recognitionEndedDueToError = true; this.parent.state.isRecognizing = false;
+                if (event.error !== 'aborted' && event.error !== 'no-speech') { console.error("语音识别错误", event.error, event.message); }
+                this.parent.audio.stopMicAnimation();
+                this.parent.ui.statusText.classList.remove('pulse-animation');
+                clearTimeout(this.parent.state.endSpeechTimeout);
+                this.parent.state.endSpeechTimeout = null;
+                if (event.error === 'no-speech') {
+                    this.parent.state.noSpeechErrorCount++;
+                    if (this.parent.state.noSpeechErrorCount < this.parent.CONFIG.NO_SPEECH_RETRY_LIMIT) {
+                        this.parent.ui.statusText.textContent = "没有听到您的声音，请重试。";
+                        setTimeout(() => this.parent.startUserFollowRead(), 2000);
+                    } else {
+                        this.parent.ui.statusText.textContent = "多次未能检测到声音，将为您重置本句。";
+                        setTimeout(() => this.parent.startNextSentence(), 2500);
+                    }
+                } else if (event.error === 'audio-capture') {
+                    this.parent.ui.statusText.textContent = "麦克风错误，请检查您的设备。";
+                } else if (event.error === 'not-allowed') {
+                    this.parent.ui.statusText.textContent = "需要麦克风权限才能继续。";
+                } else if (event.error === 'network') {
+                    // FIX: Add specific handling for network errors.
+                    this.parent.ui.statusText.textContent = "网络连接问题，将为您重置本句。";
+                    setTimeout(() => this.parent.startNextSentence(), 2500);
+                } else if (event.error !== 'aborted') {
+                    this.parent.ui.statusText.textContent = `发生未知错误: ${event.error}`;
+                }
+            },
+        },
+        audio: {
+            parent: null,
+            async setupVisualizer() {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    this.parent.apis.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.parent.apis.analyser = this.parent.apis.audioContext.createAnalyser();
+                    this.parent.apis.micStreamSource = this.parent.apis.audioContext.createMediaStreamSource(stream);
+                    this.parent.apis.micStreamSource.connect(this.parent.apis.analyser);
+                    this.parent.apis.analyser.fftSize = 256;
+                } catch (err) { console.warn(`无法设置音频可视化: ${err.message}`); this.parent.ui.statusText.textContent = "无法访问麦克风进行可视化。"; }
+            },
+            startMicAnimation() {
+                if (!this.parent.apis.analyser) return;
+                this.parent.ui.micWave.style.visibility = 'visible';
+                const computedStyle = getComputedStyle(document.body);
+                const backgroundColor = computedStyle.getPropertyValue('--color-background').trim();
+                const waveColor = computedStyle.getPropertyValue('--color-brand-blue').trim();
+                const bufferLength = this.parent.apis.analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+                const draw = () => {
+                    this.parent.apis.visualizerFrameId = requestAnimationFrame(draw);
+                    this.parent.apis.analyser.getByteTimeDomainData(dataArray);
+                    const ctx = this.parent.ui.waveCanvasCtx, canvas = this.parent.ui.micWave;
+                    ctx.fillStyle = backgroundColor;
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    ctx.lineWidth = 2; ctx.strokeStyle = waveColor; ctx.beginPath();
+                    const sliceWidth = canvas.width * 1.0 / bufferLength; let x = 0;
+                    for (let i = 0; i < bufferLength; i++) { const v = dataArray[i] / 128.0, y = v * canvas.height / 2; if (i === 0) { ctx.moveTo(x, y); } else { ctx.lineTo(x, y); } x += sliceWidth; }
+                    ctx.lineTo(canvas.width, canvas.height / 2); ctx.stroke();
+                };
+                draw();
+            },
+            stopMicAnimation() { if(this.parent.apis.visualizerFrameId) { cancelAnimationFrame(this.parent.apis.visualizerFrameId); this.parent.apis.visualizerFrameId = null; } this.parent.ui.micWave.style.visibility = 'hidden'; }
+        },
+        storage: {
+            parent: null,
+            getProgress() { try { return JSON.parse(localStorage.getItem(this.parent.CONFIG.DB_KEY)) || {}; } catch (e) { return {}; } },
+            saveProgress(lessonId, scores, lastIndex) {
+                if (this.parent.state.isReinforcementMode) return;
+                const db = this.getProgress();
+                const lessonProgress = db[lessonId] || { scores: [], averageScore: -1 };
+                const validScores = scores.filter(s => s >= 0);
+                const newAverage = validScores.length > 0 ? Math.round(validScores.reduce((a, b) => a + b, 0) / validScores.length) : 0;
+                db[lessonId] = { scores, lastIndex, averageScore: Math.max(lessonProgress.averageScore, newAverage) };
+                localStorage.setItem(this.parent.CONFIG.DB_KEY, JSON.stringify(db));
+            },
+            loadProgress(lessonId) { return this.getProgress()[lessonId]; },
+            clearProgress(lessonId) { const db = this.getProgress(); delete db[lessonId]; localStorage.setItem(this.parent.CONFIG.DB_KEY, JSON.stringify(db)); }
+        },
+    };
+
+    function initSubmodule(submodule) {
+        submodule.parent = EchoVerseApp;
+        Object.keys(submodule).forEach(key => {
+            if (typeof submodule[key] === 'function') {
+                submodule[key] = submodule[key].bind(submodule);
+            }
+        });
+    }
+    initSubmodule(EchoVerseApp.speech);
+    initSubmodule(EchoVerseApp.audio);
+    initSubmodule(EchoVerseApp.storage);
+
+    EchoVerseApp.init();
+    
+    window.injectCourseData = (newCourseData) => {
+        console.log("注入新的课程数据...", newCourseData);
+        EchoVerseApp.courseData = newCourseData;
+        localStorage.removeItem(EchoVerseApp.CONFIG.DB_KEY);
+        EchoVerseApp.renderPacks();
+        EchoVerseApp.showScreen('packs');
+        console.log("新课程数据已注入并刷新UI。");
+    };
+});
+</script>
+
+</body>
+</html>

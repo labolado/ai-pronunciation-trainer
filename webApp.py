@@ -298,10 +298,10 @@ if __name__ == "__main__":
     language = 'de'
     print("Starting AI Pronunciation Trainer...")
     print("Current directory:", os.getcwd())
-    print("Server will be available at: http://127.0.0.1:3001/")
+    print("Server will be available at: http://127.0.0.1:3000/")
     print("Loading models... This may take a few minutes on first run.")
     
     try:
-        app.run(host="0.0.0.0", port=3001, debug=True)
+        app.run(host="0.0.0.0", port=3000, debug=True)
     except Exception as e:
         print(f"Failed to start server: {e}")
