@@ -7,7 +7,8 @@ import utilsFileIO
 import pronunciationTrainer
 import base64
 import time
-import audioread
+import soundfile as sf
+import subprocess
 import numpy as np
 from torchaudio.transforms import Resample
 import io
@@ -38,20 +39,78 @@ def lambda_handler(event, context):
                 'Access-Control-Allow-Origin': '*',
                 'Access-Control-Allow-Methods': 'OPTIONS,POST,GET'
             },
-            'body': ''
+            'body': json.dumps({
+                'pronunciation_accuracy': '0',
+                'ipa_transcript': '',
+                'real_transcripts_ipa': '',
+                'matched_transcripts_ipa': '',
+                'pair_accuracy_category': '',
+                'is_letter_correct_all_words': '',
+                'start_time': '',
+                'end_time': ''
+            })
         }
 
-    
-    with tempfile.NamedTemporaryFile(suffix=".ogg", delete=True) as tmp:
-        tmp.write(file_bytes)
-        tmp.flush()
-        tmp_name = tmp.name
-        signal, fs = audioread_load(tmp_name)
-    signal = transform(torch.Tensor(signal)).unsqueeze(0)
+    try:
+        with tempfile.NamedTemporaryFile(suffix=".ogg", delete=True) as tmp:
+            tmp.write(file_bytes)
+            tmp.flush()
+            tmp_name = tmp.name
+            
+            # Convert OGG to WAV using FFmpeg
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=True) as wav_tmp:
+                wav_name = wav_tmp.name
+                try:
+                    subprocess.run([
+                        'ffmpeg', '-i', tmp_name, '-acodec', 'pcm_s16le', 
+                        '-ar', '48000', '-ac', '1', '-y', wav_name
+                    ], check=True, capture_output=True)
+                    signal, fs = sf.read(wav_name, dtype='float32')
+                    
+                    # Check if audio was successfully read
+                    if len(signal) == 0:
+                        print("Warning: Empty audio signal after conversion")
+                        return json.dumps({
+                            'pronunciation_accuracy': '0',
+                            'ipa_transcript': '',
+                            'real_transcripts_ipa': '',
+                            'matched_transcripts_ipa': '',
+                            'pair_accuracy_category': '',
+                            'is_letter_correct_all_words': '',
+                            'start_time': '',
+                            'end_time': ''
+                        })
+                        
+                except subprocess.CalledProcessError as e:
+                    print(f"FFmpeg conversion failed: {e}")
+                    return json.dumps({
+                        'pronunciation_accuracy': '0',
+                        'ipa_transcript': '',
+                        'real_transcripts_ipa': '',
+                        'matched_transcripts_ipa': '',
+                        'pair_accuracy_category': '',
+                        'is_letter_correct_all_words': '',
+                        'start_time': '',
+                        'end_time': ''
+                    })
+                    
+        signal = transform(torch.Tensor(signal)).unsqueeze(0)
 
-
-    result = trainer_SST_lambda[language].processAudioForGivenText(
-        signal, real_text)
+        result = trainer_SST_lambda[language].processAudioForGivenText(
+            signal, real_text)
+            
+    except Exception as e:
+        print(f"Error processing audio: {e}")
+        return json.dumps({
+            'pronunciation_accuracy': '0',
+            'ipa_transcript': '',
+            'real_transcripts_ipa': '',
+            'matched_transcripts_ipa': '',
+            'pair_accuracy_category': '',
+            'is_letter_correct_all_words': '',
+            'start_time': '',
+            'end_time': ''
+        })
 
     #start = time.time()
     #os.remove(random_file_name)
@@ -98,94 +157,3 @@ def lambda_handler(event, context):
            'is_letter_correct_all_words': is_letter_correct_all_words}
 
     return json.dumps(res)
-
-
-
-def audioread_load(path, offset=0.0, duration=None, dtype=np.float32):
-    """Load an audio buffer using audioread.
-
-    This loads one block at a time, and then concatenates the results.
-    """
-
-    y = []
-    with audioread.audio_open(path) as input_file:
-        sr_native = input_file.samplerate
-        n_channels = input_file.channels
-
-        s_start = int(np.round(sr_native * offset)) * n_channels
-
-        if duration is None:
-            s_end = np.inf
-        else:
-            s_end = s_start + \
-                (int(np.round(sr_native * duration)) * n_channels)
-
-        n = 0
-
-        for frame in input_file:
-            frame = buf_to_float(frame, dtype=dtype)
-            n_prev = n
-            n = n + len(frame)
-
-            if n < s_start:
-                # offset is after the current frame
-                # keep reading
-                continue
-
-            if s_end < n_prev:
-                # we're off the end.  stop reading
-                break
-
-            if s_end < n:
-                # the end is in this frame.  crop.
-                frame = frame[: s_end - n_prev]
-
-            if n_prev <= s_start <= n:
-                # beginning is in this frame
-                frame = frame[(s_start - n_prev):]
-
-            # tack on the current frame
-            y.append(frame)
-
-    if y:
-        y = np.concatenate(y)
-        if n_channels > 1:
-            y = y.reshape((-1, n_channels)).T
-    else:
-        y = np.empty(0, dtype=dtype)
-
-    return y, sr_native
-
-# From Librosa
-
-
-def buf_to_float(x, n_bytes=2, dtype=np.float32):
-    """Convert an integer buffer to floating point values.
-    This is primarily useful when loading integer-valued wav data
-    into numpy arrays.
-
-    Parameters
-    ----------
-    x : np.ndarray [dtype=int]
-        The integer-valued data buffer
-
-    n_bytes : int [1, 2, 4]
-        The number of bytes per sample in ``x``
-
-    dtype : numeric type
-        The target output type (default: 32-bit float)
-
-    Returns
-    -------
-    x_float : np.ndarray [dtype=float]
-        The input data buffer cast to floating point
-    """
-
-    # Invert the scale of the data
-    scale = 1.0 / float(1 << ((8 * n_bytes) - 1))
-
-    # Construct the format string
-    fmt = "<i{:d}".format(n_bytes)
-
-    # Rescale and format the data buffer
-    return scale * np.frombuffer(x, fmt).astype(dtype)

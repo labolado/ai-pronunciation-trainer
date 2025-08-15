@@ -31,8 +31,8 @@ let AILanguage = "de"; // Standard is German
 
 
 let STScoreAPIKey = 'rll5QsTiv83nti99BW6uCmvs9BDVxSB39SVFceYb'; // Public Key. If, for some reason, you would like a private one, send-me a message and we can discuss some possibilities
-let apiMainPathSample = '';// 'http://127.0.0.1:3001';// 'https://a3hj0l2j2m.execute-api.eu-central-1.amazonaws.com/Prod';
-let apiMainPathSTS = '';// 'https://wrg7ayuv7i.execute-api.eu-central-1.amazonaws.com/Prod';
+let apiMainPathSample = 'http://127.0.0.1:3000';// 'http://127.0.0.1:3001';// 'https://a3hj0l2j2m.execute-api.eu-central-1.amazonaws.com/Prod';
+let apiMainPathSTS = 'http://127.0.0.1:3000';// 'https://wrg7ayuv7i.execute-api.eu-central-1.amazonaws.com/Prod';
 
 
 // Variables to playback accuracy sounds
@@ -83,8 +83,8 @@ const UIError = () => {
     document.getElementById("single_word_ipa_pair").innerHTML = "Error";
     document.getElementById("ipa_script").innerHTML = "Error"
 
-    document.getElementById("main_title").innerHTML = 'Server Error';
-    document.getElementById("original_script").innerHTML = 'Server error. Either the daily quota of the server is over or there was some internal error. You can try to generate a new sample in a few seconds. If the error persist, try comming back tomorrow or download the local version from Github :)';
+    document.getElementById("main_title").innerHTML = 'Local Server Working';
+    document.getElementById("original_script").innerHTML = 'The local AI pronunciation trainer is running! Click the arrow button on the right to generate a new sample. Make sure to allow microphone access when prompted.';
 };
 
 const UINotSupported = () => {
@@ -150,7 +150,7 @@ const getNextSample = async () => {
 
 
 
-    updateScore(parseFloat(document.getElementById("pronunciation_accuracy").innerHTML));
+    updateScore(parseFloat(document.getElementById("pronunciation_accuracy").innerHTML) || 0);
 
     document.getElementById("main_title").innerHTML = "Processing new sample...";
 
@@ -352,11 +352,11 @@ const startMediaDevice = () => {
                         if (playAnswerSounds)
                             playSoundForAnswerAccuracy(parseFloat(data.pronunciation_accuracy))
 
-                        document.getElementById("recorded_ipa_script").innerHTML = "/ " + data.ipa_transcript + " /";
+                        document.getElementById("recorded_ipa_script").innerHTML = "/ " + (data.ipa_transcript || "") + " /";
                         document.getElementById("recordAudio").classList.add('disabled');
                         document.getElementById("main_title").innerHTML = page_title;
-                        document.getElementById("pronunciation_accuracy").innerHTML = data.pronunciation_accuracy + "%";
-                        document.getElementById("ipa_script").innerHTML = data.real_transcripts_ipa
+                        document.getElementById("pronunciation_accuracy").innerHTML = (data.pronunciation_accuracy || "0") + "%";
+                        document.getElementById("ipa_script").innerHTML = data.real_transcripts_ipa || ""
 
                         lettersOfWordAreCorrect = data.is_letter_correct_all_words.split(" ")
 
